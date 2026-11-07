@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esm-to-aws-pipeline"
+dynamic = ["version"]
+description = "Upload to AWS using eSlideManager metadata"
+readme = "README.md"
+requires-python = ">= 3.12"
+authors = [{name = "Therry Malone"}]
+license = "MIT"
+license-files = ["LICENSE"]
+
+dependencies = [
+    "numpy>=2.5",
+    "pandas>=3.1",
+    "python-dotenv>=1.2.4",
+    "tqdm>=4.70",
+    "typer>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.2",
+]
+
+[project.scripts]
+esm-to-aws = "esm_aws_pipe.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = {attr = "esm_aws_pipe.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
