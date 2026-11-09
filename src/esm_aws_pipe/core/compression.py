@@ -1,5 +1,5 @@
 import shutil
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 from pathlib import Path
 
 import pandas as pd
@@ -59,10 +59,25 @@ def load_and_validate_manifest(
     return manifest
 
 
+def clean_manifest():
+    """
+
+    Perform the following cleanings task:
+        1. Update destination dir to `save_dir`/<group>
+            Images are temporarily moved here prior
+            to compression
+        2. Add group id to filenames if needed to finalize
+           the destination path
+
+
+    """
+
+
 def compress(
     manifest: pd.DataFrame,
     outdir: Path,
     metadata_tracker: Optional[ProcessMetadata] = None,
+    missing_group_behavior: Literal["ignore", "group"] = "group",
 ):
     """Temporarily move WSIs to a folder for compression
 
@@ -72,6 +87,17 @@ def compress(
             Structurally validated manifest detailing
             images and associated metadata required for
             processing
+
+        out_dir : Path
+            Zipped files are saved here
+
+        metadata_tracker : Optional[ProcessMetadata], default=None
+            Object for tracking processing metadata
+
+        missing_group_behavior : {"ignore", "group"}
+            Defines how to handle WSIs without a group ID in the manifest
+            * "ignore": images are skipped
+            * "group": images are saved to a directory labelled "unknown_group"
 
     """
     clock = Clock()

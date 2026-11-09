@@ -59,6 +59,7 @@ def format_manifest(
     # ESM exports data with extra comma at end, creating a false column
     esm_export = esm_export.dropna(axis=1)
 
+    # validate required headers
     current_headers = set(esm_export.columns)
     missing_reqs = REQ_ESM_EXPORT_COLS.difference(current_headers)
     if any(missing_reqs):
@@ -73,6 +74,7 @@ def format_manifest(
         valid_location=manifest["File Location"].apply(lambda x: Path(x).exists()),
         filename=manifest["File Location"].apply(lambda x: Path(x).name),
     )
+    # extract group from filename and mark WSIs missing the group ID
     manifest = manifest.assign(
         group=manifest["filename"].apply(
             lambda x: (
@@ -82,38 +84,40 @@ def format_manifest(
             )
         )
     )
+    # used to update destination filename once group IDs are manually
+    # entered into manifest
+    manifest = manifest.assign(missing_group=manifest["group"].isna())
 
     dropped: list[str] = []
 
     def validate_aperio_location(m: pd.DataFrame) -> pd.DataFrame:
+        """Remove WSIs with invalid file locations"""
         n_valid_locations = m[m["valid_location"] == True]["valid_location"].count()
         print(f"--- {n_valid_locations} image(s) with valid Aperio location(s) ---")
         if n_valid_locations != len(m):
             dropped = m[m["valid_location"] == False]["filename"].to_list()
             print(
-                f"\nWARNING: Dropping the following image(s) due to invalid Aperio location(s):"
+                f"\nWARNING: Dropping the following images due to an invalid Aperio location:"
             )
             for i, image in enumerate(dropped, 1):
                 print(f"\t{i}) {image}")
 
             m = m[m["valid_location"] == True]
 
-        return m
+        return m.drop(columns=["valid_location"])
 
-    # will always fail in testing given false paths
-    # ignore filtering if so
+    # check for valid Aperio locations (e.g., WSIs moved, renamed, or deleted)
+    # will always fail testing given false paths triggering complete removal
     if not testing:
-        # check for valid Aperio locations (e.g., WSIs moved, renamed, or deleted)
-
         manifest = validate_aperio_location(manifest)
 
-    # check for missing JDI identification
-    missing_jdi = manifest[manifest["group"].isna()]
-    if not missing_jdi.empty:
+    # check for missing group identification
+    missing_group = manifest[manifest["group"].isna()]
+    if not missing_group.empty:
         print(
             f"\nWARNING: The following images are missing a {group_id_prefix} number:"
         )
-        for i, image in enumerate(missing_jdi["File Location"].to_list(), 1):
+        for i, image in enumerate(missing_group["File Location"].to_list(), 1):
             print(f"\t{i}) {image}")
 
         solution_text = f"\t*These images will not be removed from the manifest; however, the the {group_id_prefix} number must be manually input into the manifest in the `group` column. Images with persistently missing {group_id_prefix} numbers during uploading will be skipped silently later"
@@ -128,8 +132,8 @@ def format_manifest(
                 f"Unexpected `save_dir` type: {type(save_dir)}. Must supply Path"
             )
         if not save_dir.is_dir():
-            raise FileExistsError(
-                f"Must supply path to a directory, not {save_dir.name}"
+            raise FileNotFoundError(
+                f"Invalid directory. Cannot save manifest to {save_dir}"
             )
 
         save_path = save_dir / "esm_to_aws_manifest.csv"
@@ -137,19 +141,19 @@ def format_manifest(
 
         if isinstance(metadata_tracker, ProcessMetadata):
             metadata_tracker.add_manifest_metadata(
-                path=save_path,
+                path=save_path.resolve(),
             )
 
-        print(f"Saved manifest to {save_path}")
+        print(f"Saved manifest to {save_path.resolve()}")
 
     # add to running metadata tracker if provided
     if isinstance(metadata_tracker, ProcessMetadata):
         metadata_tracker.add_esm_export_metadata(
-            path=esm_export_path,
+            path=esm_export_path.resolve(),
             identified_exports=len(esm_export),
             dropped_images=dropped,
-            missing_group_id_count=len(missing_jdi),
-            missing_group_id_filenames=missing_jdi["File Location"].to_list(),
+            missing_group_id_count=len(missing_group),
+            missing_group_id_filenames=missing_group["File Location"].to_list(),
         )
 
         metadata_tracker.add_manifest_metadata(
