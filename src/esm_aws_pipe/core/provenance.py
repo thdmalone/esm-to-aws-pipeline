@@ -11,6 +11,7 @@ class ProcessMetadata:
     save_dir: Path
     esm_export: dict = field(default_factory=dict)
     manifest: dict = field(default_factory=dict)
+    compression: dict = field(default_factory=dict)
     _ctime = None
 
     def __post_init__(self):
@@ -32,11 +33,18 @@ class ProcessMetadata:
     def esm_export_metadata(self) -> dict:
         return self.esm_export
 
+    @property
+    def compression_metadata(self) -> dict:
+        return self.compression
+
     def add_esm_export_metadata(self, **metadata):
         self.esm_export.update(**metadata)
 
     def add_manifest_metadata(self, **metadata):
         self.manifest.update(**metadata)
+
+    def add_compression_metadata(self, **metadata):
+        self.compression.update(**metadata)
 
     def to_dict(self) -> dict:
         return {
@@ -44,6 +52,7 @@ class ProcessMetadata:
             "batch_id": self.batch_id,
             "esm_export_meta": self.esm_export,
             "manifest_meta": self.manifest,
+            "compression_meta": self.compression,
         }
 
     def export(self):

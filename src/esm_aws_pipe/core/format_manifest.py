@@ -12,13 +12,12 @@ import numpy as np
 from esm_aws_pipe.core.provenance import ProcessMetadata
 from esm_aws_pipe.utils import Clock
 
-REQ_ESM_EXPORT_COLS = {"Image ID", "File Location"}
+REQ_ESM_EXPORT_COLS = {"Specimen Acc#", "Image ID", "File Location"}
 
 
 def format_manifest(
     esm_export_path: Path,
     save_dir: Optional[Path] = None,
-    default_dest_dir: Optional[Union[Path, str]] = None,
     save_manifest: bool = True,
     group_id_prefix: str = "JDI",
     testing: bool = False,
@@ -33,10 +32,6 @@ def format_manifest(
 
         save_dir : Path
             Path to the directory where the manifest will be saved to
-
-        default_dest_dir : Optional[Path | str], default=None
-            Optionally specify a default destination directory for images
-            to be used whenever
 
     Returns
     -------
@@ -67,12 +62,10 @@ def format_manifest(
             f"Missing required headers: {missing_reqs}\n\nMust re-export data from ESM with this option selected"
         )
 
-    manifest = esm_export.assign(dest_dir="")  # placeholder column NOTE might move
-
     # validate Aperio locations and extract filenames
-    manifest = manifest.assign(
-        valid_location=manifest["File Location"].apply(lambda x: Path(x).exists()),
-        filename=manifest["File Location"].apply(lambda x: Path(x).name),
+    manifest = esm_export.assign(
+        valid_location=esm_export["File Location"].apply(lambda x: Path(x).exists()),
+        filename=esm_export["File Location"].apply(lambda x: Path(x).name),
     )
     # extract group from filename and mark WSIs missing the group ID
     manifest = manifest.assign(

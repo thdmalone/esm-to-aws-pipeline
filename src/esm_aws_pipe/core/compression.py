@@ -8,7 +8,7 @@ from tqdm import tqdm
 from esm_aws_pipe.utils import Clock
 from esm_aws_pipe.core.provenance import ProcessMetadata
 
-REQUIRED_MANIFEST_HEADERS = {"Image ID", "File Location", "dest_dir"}
+REQUIRED_MANIFEST_HEADERS = {"Image ID", "File Location"}
 
 
 def load_and_validate_manifest(
@@ -59,25 +59,12 @@ def load_and_validate_manifest(
     return manifest
 
 
-def clean_manifest():
-    """
-
-    Perform the following cleanings task:
-        1. Update destination dir to `save_dir`/<group>
-            Images are temporarily moved here prior
-            to compression
-        2. Add group id to filenames if needed to finalize
-           the destination path
-
-
-    """
-
-
 def compress(
     manifest: pd.DataFrame,
     outdir: Path,
     metadata_tracker: Optional[ProcessMetadata] = None,
     missing_group_behavior: Literal["ignore", "group"] = "group",
+    testing: bool = False,
 ):
     """Temporarily move WSIs to a folder for compression
 
@@ -100,40 +87,97 @@ def compress(
             * "group": images are saved to a directory labelled "unknown_group"
 
     """
+    from subprocess import run
+
+    def _update_group(m: pd.DataFrame, d: bool) -> pd.DataFrame:
+        # WSIs that are still missing a group IDs
+        missing_group = m[m["group"].isna() == True]
+
+        # tracking variables
+        n_missing = 0
+        no_group = []
+
+        if any(missing_group):
+            n_missing = len(missing_group)
+            print(
+                f"WARNING: {n_missing} WSIs that are still missing a group ID | drop_ungrouped = {d}"
+            )
+            no_group = missing_group["File Location"].to_list()
+            for i in no_group:
+                print(f"* {i}")
+
+            if d:
+                m = m[m["group"].isna() == False]
+            else:
+                m.loc[missing_group.index, "group"] = "ungrouped"
+
+        if isinstance(metadata_tracker, ProcessMetadata):
+            metadata_tracker.add_compression_metadata(
+                drop_ungrouped=d, n_dropped=n_missing, missing_group=no_group
+            )
+
+        return m
+
+    def _copy_files(paths: list[tuple[str, str]]):
+        for src, dst in paths:
+            source = Path(src)
+            destination = Path(dst)
+
+            destination.parent.mkdir(parents=True, exist_ok=True)
+
+            shutil.copyfile(source, destination)
+
     clock = Clock()
     clock.start()
 
-    # append filename to dst dir
-    corrected_dst = (
-        manifest["dest_dir"].astype(str) + "\\" + manifest["filename"].astype(str)
-    )
+    drop = True if missing_group_behavior == "ignore" else False
+    cleaned_manifest = _update_group(manifest, drop)
 
-    # reformat to derive src-dst path pairs
-    src_dst = pd.concat([manifest["File Location"], corrected_dst], axis=1).set_axis(
-        ["src", "dst"], axis=1
+    # format destination paths
+    cleaned_manifest = cleaned_manifest.assign(
+        dst_dir=f"{str(outdir)}\\"
+        + cleaned_manifest["group"].astype(str)
+        + "\\"
+        + cleaned_manifest["filename"].astype(str)
     )
-    paired_paths = list(src_dst.itertuples(index=False, name=None))
 
     # move images from Aperio into a temporary directory that will be compressed
-    for src, dst in tqdm(paired_paths, desc="Moving from Aperio"):
-        source = Path(src)
-        destination = Path(dst)
+    zipped_paths = []
+    for group_id, group_df in tqdm(
+        list(cleaned_manifest.groupby("group")), desc="Compressing groups"
+    ):
+        dest_dir = outdir / str(group_id)
+        paired_paths = list(
+            group_df[["File Location", "dst_dir"]].itertuples(index=False, name=None)
+        )
+        if not testing:
+            _copy_files(paired_paths)
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        zipped_path = shutil.make_archive(
+            base_name=dest_dir, root_dir=dest_dir, format="zip"  # type: ignore
+        )
+        zipped_paths.append(zipped_path)
 
-        shutil.copyfile(source, destination)
-
-    shutil.make_archive(base_name="out", root_dir=outdir, format="zip")
-
-    # move images back to Aperio
-    for src, dst in paired_paths:
-        source = Path(src)
-        destination = Path(dst)
-
-        shutil.move(destination, source)
+        # manually format target zip path to check existence
+        zip_manual = outdir / f"{group_id}.zip"
+        if zip_manual.exists():
+            # NOTE shutil.rmtree did not work for onedrive
+            run(["cmd", "/c", "rmdir", "/s", "/q", dest_dir])
 
     clock.end()
 
+    if isinstance(metadata_tracker, ProcessMetadata):
+        metadata_tracker.add_compression_metadata(zipped_paths=zipped_paths)
+        metadata_tracker.export()
 
-# copy into destination folder - shutil.copyfile()
-# compress destination folder - shutil.make_archive()
+
+if __name__ == "__main__":
+    mani = pd.read_csv(
+        r"C:\Users\thmalone\OneDrive - Childrens Hospital Los Angeles\Personal Research\Acute Projects\PLM AWS Upload\cli-test\esm_to_aws_manifest.csv"
+    )
+    od = Path(
+        r"C:\Users\thmalone\OneDrive - Childrens Hospital Los Angeles\Personal Research\Acute Projects\PLM AWS Upload\cli-test"
+    )
+    mdt = ProcessMetadata("cli-test", od)
+
+    compress(manifest=mani, outdir=od, metadata_tracker=mdt)
