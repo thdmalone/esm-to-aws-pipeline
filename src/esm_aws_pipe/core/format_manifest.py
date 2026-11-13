@@ -149,6 +149,9 @@ def format_manifest(
             missing_group_id_filenames=missing_group["File Location"].to_list(),
         )
 
+        if len(missing_group) > 0:
+            metadata_tracker._missing_groups = True
+
         metadata_tracker.add_manifest_metadata(
             created_in=endtime,
             total_wsis=len(manifest),

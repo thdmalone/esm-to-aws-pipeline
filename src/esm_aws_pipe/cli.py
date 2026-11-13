@@ -4,7 +4,7 @@ from typing import Annotated
 import typer
 
 from esm_aws_pipe.core.format_manifest import format_manifest
-from esm_aws_pipe.core.compression import load_and_validate_manifest, compress
+from esm_aws_pipe.core.compression import compress
 from esm_aws_pipe.core.provenance import ProcessMetadata
 from esm_aws_pipe.utils import ensure_dir
 
@@ -50,6 +50,19 @@ def process_batch_esm(
         save_manifest=save_manifest,
         metadata_tracker=metadata,
     )
+
+    if metadata.missing_groups:  # type: ignore
+        ready = typer.confirm(
+            f"Please review the manifest for missing groups:\n{out_dir.resolve() / 'esm_to_aws_manifest.csv\n\nReviewed?'}"
+        )
+
+        if not ready:
+            typer.echo(
+                f"Terminating processing. Restart from ESM or continue directly from an existing manifest."
+            )
+            return
+
+    metadata = compress(manifest=manifest, outdir=out_dir, metadata_tracker=metadata)
 
     metadata.export()  # type: ignore
 

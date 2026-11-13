@@ -13,6 +13,7 @@ class ProcessMetadata:
     manifest: dict = field(default_factory=dict)
     compression: dict = field(default_factory=dict)
     _ctime = None
+    _missing_groups: bool = False
 
     def __post_init__(self):
         if not self.save_dir.is_dir():
@@ -24,6 +25,10 @@ class ProcessMetadata:
     # @property
     # def save_dir(self) -> Path:
     #     return Path(self._save_dir)
+
+    @property
+    def missing_groups(self) -> bool:
+        return self._missing_groups
 
     @property
     def manifest_metadata(self) -> dict:
@@ -58,4 +63,4 @@ class ProcessMetadata:
     def export(self):
         save_to = self.save_dir / "process_metadata.json"
         save_json(save_to, self.to_dict())
-        print(f"\nSaved run metadata to {save_to}")
+        print(f"\nSaved run metadata to {save_to.resolve()}")

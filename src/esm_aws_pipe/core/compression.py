@@ -65,7 +65,7 @@ def compress(
     metadata_tracker: Optional[ProcessMetadata] = None,
     missing_group_behavior: Literal["ignore", "group"] = "group",
     testing: bool = False,
-):
+) -> Union[ProcessMetadata, None]:
     """Temporarily move WSIs to a folder for compression
 
     Parameters
@@ -94,7 +94,7 @@ def compress(
         missing_group = m[m["group"].isna() == True]
 
         # tracking variables
-        n_missing = 0
+        dropped = 0
         no_group = []
 
         if any(missing_group):
@@ -107,13 +107,16 @@ def compress(
                 print(f"* {i}")
 
             if d:
+                dropped = n_missing
                 m = m[m["group"].isna() == False]
             else:
                 m.loc[missing_group.index, "group"] = "ungrouped"
 
         if isinstance(metadata_tracker, ProcessMetadata):
             metadata_tracker.add_compression_metadata(
-                drop_ungrouped=d, n_dropped=n_missing, missing_group=no_group
+                drop_ungrouped_images=d,
+                n_images_dropped=dropped,
+                missing_group=no_group,
             )
 
         return m
@@ -164,11 +167,16 @@ def compress(
             # NOTE shutil.rmtree did not work for onedrive
             run(["cmd", "/c", "rmdir", "/s", "/q", dest_dir])
 
-    clock.end()
+    endtime = clock.end()
 
     if isinstance(metadata_tracker, ProcessMetadata):
-        metadata_tracker.add_compression_metadata(zipped_paths=zipped_paths)
-        metadata_tracker.export()
+        metadata_tracker.add_compression_metadata(
+            elapsed_time=endtime,
+            missing_group_behavior=missing_group_behavior,
+            zipped_paths=zipped_paths,
+        )
+
+    return metadata_tracker
 
 
 if __name__ == "__main__":
