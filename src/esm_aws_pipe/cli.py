@@ -5,6 +5,7 @@ import typer
 
 from esm_aws_pipe.core.format_manifest import format_manifest
 from esm_aws_pipe.core.compression import compress
+from esm_aws_pipe.core.s3 import upload_file_to_s3
 from esm_aws_pipe.core.provenance import ProcessMetadata
 from esm_aws_pipe.utils import ensure_dir
 
@@ -52,10 +53,11 @@ def process_batch_esm(
     )
 
     if metadata.missing_groups:  # type: ignore
-        ready = typer.confirm(
-            f"Please review the manifest for missing groups:\n{out_dir.resolve() / 'esm_to_aws_manifest.csv\n\nReviewed?'}"
+        typer.echo(
+            f"Images with missing group IDs detected. Please review the manifest and remediate:\n{out_dir.resolve() / 'esm_to_aws_manifest.csv'}\n\n"
         )
 
+        ready = typer.confirm("Ready to proceed?")
         if not ready:
             typer.echo(
                 f"Terminating processing. Restart from ESM or continue directly from an existing manifest."
