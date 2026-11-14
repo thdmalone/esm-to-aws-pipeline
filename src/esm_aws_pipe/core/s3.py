@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Union, Optional
 import time
 
-import boto3
+from boto3 import client
 from botocore.exceptions import BotoCoreError, ClientError
 
 
@@ -38,11 +38,11 @@ def upload_file_to_s3(
             Delay between failed upload attempts in seconds
 
     """
-    client = boto3.client("s3", region_name=region)
+    cl = client("s3", region_name=region)
     attempts = 0
     while True:
         try:
-            client.upload_file(str(local_path), bucket, key)
+            cl.upload_file(str(local_path), bucket, key)
             return f"s3://{bucket}/{key}"
         except (BotoCoreError, ClientError) as exc:
             attempts += 1
