@@ -3,11 +3,11 @@ and handles any intermediate pre-processing
 
 """
 
-from typing import Optional, Union
+from typing import Optional
 from pathlib import Path
 
-import pandas as pd
-import numpy as np
+from pandas import DataFrame, read_csv
+from numpy import nan
 
 from esm_aws_pipe.core.provenance import ProcessMetadata
 from esm_aws_pipe.utils import Clock
@@ -22,7 +22,7 @@ def format_manifest(
     group_id_prefix: str = "JDI",
     testing: bool = False,
     metadata_tracker: Optional[ProcessMetadata] = None,
-) -> tuple[pd.DataFrame, Optional[ProcessMetadata]]:
+) -> tuple[DataFrame, Optional[ProcessMetadata]]:
     """Format manifest from raw ESM export
 
     Parameters
@@ -48,7 +48,7 @@ def format_manifest(
     if esm_export_path.suffix != ".csv":
         raise ValueError(f"Expected a CSV file, not {esm_export_path.suffix}")
 
-    esm_export = pd.read_csv(esm_export_path)
+    esm_export = read_csv(esm_export_path)
     print(f"--- Identified {len(esm_export)} images to exported from ESM ---")
 
     # ESM exports data with extra comma at end, creating a false column
@@ -71,9 +71,7 @@ def format_manifest(
     manifest = manifest.assign(
         group=manifest["filename"].apply(
             lambda x: (
-                x.split(" ")[0]
-                if x.split(" ")[0].startswith(group_id_prefix)
-                else np.nan
+                x.split(" ")[0] if x.split(" ")[0].startswith(group_id_prefix) else nan
             )
         )
     )
@@ -83,7 +81,7 @@ def format_manifest(
 
     dropped: list[str] = []
 
-    def validate_aperio_location(m: pd.DataFrame) -> pd.DataFrame:
+    def validate_aperio_location(m: DataFrame) -> DataFrame:
         """Remove WSIs with invalid file locations"""
         n_valid_locations = m[m["valid_location"] == True]["valid_location"].count()
         print(f"--- {n_valid_locations} image(s) with valid Aperio location(s) ---")

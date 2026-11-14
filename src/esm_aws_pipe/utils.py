@@ -1,5 +1,5 @@
 from datetime import datetime
-import time
+from time import time
 import json
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,7 @@ class Clock:
         self.laps: list = []
 
     def start(self):
-        self.start_time = time.time()
+        self.start_time = time()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"Start time in Los Angeles: {now}")
 
@@ -22,7 +22,7 @@ class Clock:
         if not self.start_time:
             raise AttributeError(f"Clock not started. Call `start()` first")
 
-        current = time.time()
+        current = time()
 
         # no prior laps, i.e., this is the first lap
         if len(self.laps) == 0:
@@ -39,7 +39,7 @@ class Clock:
         return time_readout
 
     def end(self) -> str:
-        self.end_time = time.time()
+        self.end_time = time()
 
         if any(self.laps):
             last_stamp = self.laps[-1]

@@ -1,8 +1,8 @@
-import shutil
+from shutil import make_archive, rmtree, copyfile
 from typing import Optional, Union, Literal
 from pathlib import Path
 
-import pandas as pd
+from pandas import DataFrame, read_csv
 from tqdm import tqdm
 
 from esm_aws_pipe.utils import Clock
@@ -12,7 +12,7 @@ REQUIRED_MANIFEST_HEADERS = {"Image ID", "File Location"}
 
 
 def load_and_validate_manifest(
-    manifest: Union[Path, pd.DataFrame],
+    manifest: Union[Path, DataFrame],
     root_destination_directory: Optional[Path] = None,
 ):
     """Loads manifest CSV data and validates file locations
@@ -44,7 +44,7 @@ def load_and_validate_manifest(
         if manifest.suffix != ".csv":
             raise ValueError(f"Expected a CSV file, not {manifest.suffix}")
 
-        manifest = pd.read_csv(manifest)
+        manifest = read_csv(manifest)
 
     print(f"--- Identified {len(manifest)} images to process ---")
 
@@ -60,7 +60,7 @@ def load_and_validate_manifest(
 
 
 def compress(
-    manifest: pd.DataFrame,
+    manifest: DataFrame,
     outdir: Path,
     metadata_tracker: Optional[ProcessMetadata] = None,
     missing_group_behavior: Literal["ignore", "group"] = "group",
@@ -89,7 +89,7 @@ def compress(
     """
     from subprocess import run
 
-    def _update_group(m: pd.DataFrame, d: bool) -> pd.DataFrame:
+    def _update_group(m: DataFrame, d: bool) -> DataFrame:
         # WSIs that are still missing a group IDs
         missing_group = m[m["group"].isna() == True]
 
@@ -128,7 +128,17 @@ def compress(
 
             destination.parent.mkdir(parents=True, exist_ok=True)
 
-            shutil.copyfile(source, destination)
+            copyfile(source, destination)
+
+    def _delete_copies(dir: Path):
+        """Delete folders of copied images"""
+        try:
+            # this should work if folders are local
+            rmtree(dir)
+        except Exception:  # specify actual exception
+            # shutil.rmtree doesnt seem to work when removing
+            # dirs in CHLA sharepoint so this force deletes
+            run(["cmd", "/c", "rmdir", "/s", "/q", dest_dir])
 
     clock = Clock()
     clock.start()
@@ -156,7 +166,7 @@ def compress(
         if not testing:
             _copy_files(paired_paths)
 
-        zipped_path = shutil.make_archive(
+        zipped_path = make_archive(
             base_name=dest_dir, root_dir=dest_dir, format="zip"  # type: ignore
         )
         zipped_paths.append(zipped_path)
@@ -164,8 +174,10 @@ def compress(
         # manually format target zip path to check existence
         zip_manual = outdir / f"{group_id}.zip"
         if zip_manual.exists():
-            # NOTE shutil.rmtree did not work for onedrive
-            run(["cmd", "/c", "rmdir", "/s", "/q", dest_dir])
+            _delete_copies(dest_dir)
+        else:
+            # log warning of unexpected compression
+            pass
 
     endtime = clock.end()
 
@@ -180,7 +192,7 @@ def compress(
 
 
 if __name__ == "__main__":
-    mani = pd.read_csv(
+    mani = read_csv(
         r"C:\Users\thmalone\OneDrive - Childrens Hospital Los Angeles\Personal Research\Acute Projects\PLM AWS Upload\cli-test\esm_to_aws_manifest.csv"
     )
     od = Path(
