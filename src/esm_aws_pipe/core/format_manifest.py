@@ -3,6 +3,7 @@ and handles any intermediate pre-processing
 
 """
 
+from multiprocessing import Process
 from typing import Optional
 from pathlib import Path
 
@@ -17,12 +18,12 @@ REQ_ESM_EXPORT_COLS = {"Specimen Acc#", "Image ID", "File Location"}
 
 def format_manifest(
     esm_export_path: Path,
-    save_dir: Optional[Path] = None,
-    save_manifest: bool = True,
+    save_dir: Path,
+    metadata_tracker: ProcessMetadata,
+    *,
     group_id_prefix: str = "JDI",
     testing: bool = False,
-    metadata_tracker: Optional[ProcessMetadata] = None,
-) -> tuple[DataFrame, Optional[ProcessMetadata]]:
+) -> tuple[DataFrame, ProcessMetadata]:
     """Format manifest from raw ESM export
 
     Parameters
@@ -33,10 +34,22 @@ def format_manifest(
         save_dir : Path
             Path to the directory where the manifest will be saved to
 
+        metadata_tracker : ProcessMetadata
+            Object to track metadata
+
+        group_id_prefix : str, default="JDI"
+            Prefix to image filenames indicating the group it belongs to
+
+        testing : bool, default=False
+            Only used for pytest
+
     Returns
     -------
         manifest : DataFrame
             The processing manifest
+
+        metadata : ProcessMetadata
+            The metadata tracker, only used in a comprehensive processing run
 
     """
     clock = Clock()
@@ -117,43 +130,33 @@ def format_manifest(
     endtime = clock.end()
 
     # save manifest
-    if save_manifest:
-        if not isinstance(save_dir, Path):
-            raise TypeError(
-                f"Unexpected `save_dir` type: {type(save_dir)}. Must supply Path"
-            )
-        if not save_dir.is_dir():
-            raise FileNotFoundError(
-                f"Invalid directory. Cannot save manifest to {save_dir}"
-            )
+    if not save_dir.is_dir():
+        raise FileNotFoundError(
+            f"Invalid directory. Cannot save manifest to {save_dir}"
+        )
 
-        save_path = save_dir / "esm_to_aws_manifest.csv"
-        manifest.to_csv(save_path, index=False)
+    save_path = save_dir / "esm_to_aws_manifest.csv"
+    manifest.to_csv(save_path, index=False)
 
-        if isinstance(metadata_tracker, ProcessMetadata):
-            metadata_tracker.add_manifest_metadata(
-                path=save_path.resolve(),
-            )
-
-        print(f"Saved manifest to {save_path.resolve()}")
+    print(f"Saved manifest to {save_path.resolve()}")
 
     # add to running metadata tracker if provided
-    if isinstance(metadata_tracker, ProcessMetadata):
-        metadata_tracker.add_esm_export_metadata(
-            path=esm_export_path.resolve(),
-            identified_exports=len(esm_export),
-            dropped_images=dropped,
-            missing_group_id_count=len(missing_group),
-            missing_group_id_filenames=missing_group["File Location"].to_list(),
-        )
+    metadata_tracker.add_esm_export_metadata(
+        path=esm_export_path.resolve(),
+        identified_exports=len(esm_export),
+        dropped_images=dropped,
+        missing_group_id_count=len(missing_group),
+        missing_group_id_filenames=missing_group["File Location"].to_list(),
+    )
 
-        if len(missing_group) > 0:
-            metadata_tracker._missing_groups = True
+    if len(missing_group) > 0:
+        metadata_tracker._missing_groups = True
 
-        metadata_tracker.add_manifest_metadata(
-            created_in=endtime,
-            total_wsis=len(manifest),
-            total_groups=manifest["group"].nunique(),
-        )
+    metadata_tracker.add_manifest_metadata(
+        path=save_path.resolve(),
+        created_in=endtime,
+        total_wsis=len(manifest),
+        total_groups=manifest["group"].nunique(),
+    )
 
     return manifest, metadata_tracker

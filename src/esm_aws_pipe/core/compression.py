@@ -1,3 +1,4 @@
+from multiprocessing import Process
 from shutil import make_archive, rmtree, copyfile
 from typing import Optional, Union, Literal
 from pathlib import Path
@@ -62,10 +63,13 @@ def load_and_validate_manifest(
 def compress(
     manifest: DataFrame,
     outdir: Path,
-    metadata_tracker: Optional[ProcessMetadata] = None,
+    metadata_tracker: ProcessMetadata,
     missing_group_behavior: Literal["ignore", "group"] = "group",
     testing: bool = False,
-) -> Union[ProcessMetadata, None]:
+) -> tuple[
+    list[str],
+    ProcessMetadata,
+]:
     """Temporarily move WSIs to a folder for compression
 
     Parameters
@@ -85,6 +89,16 @@ def compress(
             Defines how to handle WSIs without a group ID in the manifest
             * "ignore": images are skipped
             * "group": images are saved to a directory labelled "unknown_group"
+
+        Returns
+        -------
+            zipped_paths : list[str]
+                Compressed file locations if a metadata tracker is
+                not provided. Used for testing confirmation at the
+                very least.
+
+            metadata : ProcessMetadata
+                The updated metadata tracking object, if provided
 
     """
     from subprocess import run
@@ -116,7 +130,7 @@ def compress(
             metadata_tracker.add_compression_metadata(
                 drop_ungrouped_images=d,
                 n_images_dropped=dropped,
-                missing_group=no_group,
+                missing_group_id=no_group,
             )
 
         return m
@@ -163,6 +177,7 @@ def compress(
         paired_paths = list(
             group_df[["File Location", "dst_dir"]].itertuples(index=False, name=None)
         )
+        # fake paths during pytest would raise error
         if not testing:
             _copy_files(paired_paths)
 
@@ -173,7 +188,7 @@ def compress(
 
         # manually format target zip path to check existence
         zip_manual = outdir / f"{group_id}.zip"
-        if zip_manual.exists():
+        if zip_manual.exists() and not testing:
             _delete_copies(dest_dir)
         else:
             # log warning of unexpected compression
@@ -181,14 +196,13 @@ def compress(
 
     endtime = clock.end()
 
-    if isinstance(metadata_tracker, ProcessMetadata):
-        metadata_tracker.add_compression_metadata(
-            elapsed_time=endtime,
-            missing_group_behavior=missing_group_behavior,
-            zipped_paths=zipped_paths,
-        )
+    metadata_tracker.add_compression_metadata(
+        elapsed_time=endtime,
+        missing_group_behavior=missing_group_behavior,
+        zipped_paths=zipped_paths,
+    )
 
-    return metadata_tracker
+    return zipped_paths, metadata_tracker
 
 
 if __name__ == "__main__":
