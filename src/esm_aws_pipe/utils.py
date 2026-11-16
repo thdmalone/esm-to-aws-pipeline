@@ -98,7 +98,9 @@ def save_json(path: Path, data: dict):
         json.dump(data, fn, cls=SetEncoder)
 
 
-def load_json(path: str) -> dict[str, Any]:
-    assert path.endswith(".json"), f"Must specify a .json file, not {path}"
+def load_json(path: Path) -> dict[str, Any]:
+    if not path.suffix == ".json":
+        raise ValueError(f"Must specify a .json file, not {path}")
+
     with open(path, "r") as fn:
         return json.load(fn)

@@ -1,8 +1,11 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime
+from typing import Union
 
-from esm_aws_pipe.utils import DT_FORMAT, save_json
+from numpy import isin
+
+from esm_aws_pipe.utils import DT_FORMAT, save_json, load_json
 
 
 @dataclass
@@ -64,3 +67,37 @@ class ProcessMetadata:
         save_to = self.save_dir / "process_metadata.json"
         save_json(save_to, self.to_dict())
         print(f"\nSaved run metadata to {save_to.resolve()}")
+
+
+def load_metadata(path: Union[str, Path]) -> ProcessMetadata:
+    """Load previously saved metadata"""
+    metadata_path = Path(path) if isinstance(path, str) else path
+    metadata = load_json(metadata_path)
+
+    # validate required keys
+    req_keys = {"batch_id", "created"}
+    missing_req_keys = req_keys.difference(set(metadata.keys()))
+
+    if any(missing_req_keys):
+        raise ValueError(
+            f"Incorrectly formatted metadata. Missing the following required keys: {missing_req_keys}."
+        )
+
+    metadata_obj = ProcessMetadata(
+        batch_id=metadata.pop("batch_id"), save_dir=metadata_path.parent
+    )
+
+    func_map = {
+        "esm_export_meta": metadata_obj.add_esm_export_metadata,
+        "manifest_meta": metadata_obj.add_manifest_metadata,
+        "compression_meta": metadata_obj.add_compression_metadata,
+    }
+
+    # override ctime
+    metadata_obj._ctime = metadata.pop("created")
+
+    for key, func in func_map.items():
+        if key in metadata.keys():
+            func(**metadata[f"{key}"])
+
+    return metadata_obj
