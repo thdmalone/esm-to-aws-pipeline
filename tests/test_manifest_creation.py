@@ -1,6 +1,7 @@
 import pytest
 
 from esm_aws_pipe.core.format_manifest import format_manifest
+from esm_aws_pipe.core.provenance import ProcessMetadata
 
 from pandas import DataFrame
 
@@ -8,6 +9,7 @@ from pandas import DataFrame
 def test_format_manifest(tmp_path):
     images = [1, 2, 3, 4]
     esm_export_data = {
+        "Specimen Acc#": ["test_batch" for _ in range(len(images))],
         "Image ID": images,
         "File Location": [
             "//path/to/GRP-1 slide.svs",
@@ -22,7 +24,8 @@ def test_format_manifest(tmp_path):
 
     manifest, _ = format_manifest(
         esm_export_path=export_path,
-        save_manifest=False,
+        save_dir=tmp_path,
+        metadata_tracker=ProcessMetadata("", tmp_path),
         group_id_prefix="GRP",
         testing=True,
     )

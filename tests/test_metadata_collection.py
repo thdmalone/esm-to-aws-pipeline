@@ -9,6 +9,7 @@ from pandas import DataFrame
 def test_metadata_collection(tmp_path):
     images = [1, 2, 3, 4]
     esm_export_data = {
+        "Specimen Acc#": ["test_batch" for _ in range(len(images))],
         "Image ID": images,
         "File Location": [
             "//path/to/GRP-1 slide.svs",
@@ -25,10 +26,10 @@ def test_metadata_collection(tmp_path):
 
     _, metadata = format_manifest(
         esm_export_path=export_path,
-        save_manifest=False,
+        save_dir=tmp_path,
+        metadata_tracker=metadata_tracker,
         group_id_prefix="GRP",
         testing=True,
-        metadata_tracker=metadata_tracker,
     )
 
     assert isinstance(metadata, ProcessMetadata)
