@@ -9,7 +9,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 def upload_file_to_s3(
     local_path: Path,
     bucket: str,
-    key: str,
+    bucket_location: str,
     *,
     region: Optional[str],
     max_retries: int = 3,
@@ -25,8 +25,8 @@ def upload_file_to_s3(
         bucket : str
             Name of the target S3 bucket to upload file to
 
-        key : str
-            S3 address
+        bucket_location : str
+            Location within bucket where file is being uploaded to
 
         region : Optional[str]
             AWS region of the target bucket
@@ -42,8 +42,8 @@ def upload_file_to_s3(
     attempts = 0
     while True:
         try:
-            cl.upload_file(str(local_path), bucket, key)
-            return f"s3://{bucket}/{key}"
+            cl.upload_file(str(local_path), bucket, bucket_location)
+            return f"s3://{bucket}/{bucket_location}"
         except (BotoCoreError, ClientError) as exc:
             attempts += 1
             if attempts > max_retries:
