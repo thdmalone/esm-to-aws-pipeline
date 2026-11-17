@@ -25,6 +25,11 @@ class ProcessMetadata:
             )
         self._ctime = datetime.now().strftime(DT_FORMAT)
 
+        if self.batch_id == "":
+            raise ValueError(
+                f"Empty batch ID detected: {self.batch_id=}\nCheck the provided CLI value or inference setting."
+            )
+
     # @property
     # def save_dir(self) -> Path:
     #     return Path(self._save_dir)
@@ -72,6 +77,11 @@ class ProcessMetadata:
 def load_metadata(path: Union[str, Path]) -> ProcessMetadata:
     """Load previously saved metadata"""
     metadata_path = Path(path) if isinstance(path, str) else path
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"No metadata found at this location {metadata_path.resolve()}\n\nPlease check the path or run `create_manifest` first."
+        )
+
     metadata = load_json(metadata_path)
 
     # validate required keys
