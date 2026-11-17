@@ -3,6 +3,7 @@ from shutil import make_archive, rmtree, copyfile
 from typing import Optional, Union, Literal
 from pathlib import Path
 
+from numpy import isin
 from pandas import DataFrame, read_csv
 from tqdm import tqdm
 
@@ -61,10 +62,11 @@ def load_and_validate_manifest(
 
 
 def compress(
-    manifest: DataFrame,
+    manifest: Union[DataFrame, Path],
     outdir: Path,
     metadata_tracker: ProcessMetadata,
-    missing_group_behavior: Literal["ignore", "group"] = "group",
+    remove_ungrouped: bool = False,
+    compression_type: str = "zip",
     testing: bool = False,
 ) -> tuple[
     list[str],
@@ -74,7 +76,7 @@ def compress(
 
     Parameters
     ----------
-        manifest : DataFrame
+        manifest : DataFrame or Path
             Structurally validated manifest detailing
             images and associated metadata required for
             processing
@@ -85,10 +87,16 @@ def compress(
         metadata_tracker : Optional[ProcessMetadata], default=None
             Object for tracking processing metadata
 
-        missing_group_behavior : {"ignore", "group"}
-            Defines how to handle WSIs without a group ID in the manifest
-            * "ignore": images are skipped
-            * "group": images are saved to a directory labelled "unknown_group"
+        remove_ungrouped : bool, default=False
+            Specify where to remove images without a group ID in
+            the `group` column of the manifest. Images without a
+            group id are grouped under "ungrouped" by default.
+
+        compression_type : str, default="zip"
+            Defines how groups are compressed
+
+        testing : bool, default=False
+            Only used for pytest
 
         Returns
         -------
@@ -157,8 +165,9 @@ def compress(
     clock = Clock()
     clock.start()
 
-    drop = True if missing_group_behavior == "ignore" else False
-    cleaned_manifest = _update_group(manifest, drop)
+    manifest = manifest if isinstance(manifest, DataFrame) else read_csv(manifest)
+
+    cleaned_manifest = _update_group(manifest, remove_ungrouped)
 
     # format destination paths
     cleaned_manifest = cleaned_manifest.assign(
@@ -182,7 +191,7 @@ def compress(
             _copy_files(paired_paths)
 
         zipped_path = make_archive(
-            base_name=dest_dir, root_dir=dest_dir, format="zip"  # type: ignore
+            base_name=dest_dir, root_dir=dest_dir, format=compression_type  # type: ignore
         )
         zipped_paths.append(zipped_path)
 
@@ -198,7 +207,7 @@ def compress(
 
     metadata_tracker.add_compression_metadata(
         elapsed_time=endtime,
-        missing_group_behavior=missing_group_behavior,
+        remove_ungrouped=remove_ungrouped,
         zipped_paths=zipped_paths,
     )
 
