@@ -15,6 +15,7 @@ class ProcessMetadata:
     esm_export: dict = field(default_factory=dict)
     manifest: dict = field(default_factory=dict)
     compression: dict = field(default_factory=dict)
+    upload: dict = field(default_factory=dict)
     _ctime = None
     _missing_groups: bool = False
 
@@ -50,6 +51,10 @@ class ProcessMetadata:
     def compression_metadata(self) -> dict:
         return self.compression
 
+    @property
+    def upload_metadata(self) -> dict:
+        return self.upload
+
     def add_esm_export_metadata(self, **metadata):
         self.esm_export.update(**metadata)
 
@@ -59,6 +64,9 @@ class ProcessMetadata:
     def add_compression_metadata(self, **metadata):
         self.compression.update(**metadata)
 
+    def add_upload_metadata(self, **metadata):
+        self.upload.update(**metadata)
+
     def to_dict(self) -> dict:
         return {
             "created": self._ctime,
@@ -66,6 +74,7 @@ class ProcessMetadata:
             "esm_export_meta": self.esm_export,
             "manifest_meta": self.manifest,
             "compression_meta": self.compression,
+            "upload_meta": self.upload,
         }
 
     def export(self):

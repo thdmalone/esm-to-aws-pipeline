@@ -1,11 +1,11 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
 from esm_aws_pipe.core.format_manifest import format_manifest
 from esm_aws_pipe.core.compression import compress
-from esm_aws_pipe.core.s3 import upload_file_to_s3
+from esm_aws_pipe.core.s3 import upload_groups, export_sharelinks
 from esm_aws_pipe.core.provenance import ProcessMetadata, load_metadata
 from esm_aws_pipe.utils import ensure_dir
 
@@ -108,8 +108,66 @@ def copy_and_compress(
 @app.command("upload")
 def upload_to_s3(
     out_dir: Annotated[Path, typer.Option(..., "--out", "--o")],
+    s3_bucket: Annotated[str, typer.Option(..., "--bucket", "--b")],
+    s3_bucket_location: Annotated[str, typer.Option(..., "--key", "--k")],
+    aws_region: Annotated[Optional[str], typer.Option("--region", "--r")] = None,
+    export_links: Annotated[bool, typer.Option("--export-links")] = True,
 ):
-    """ """
+    """Upload compressed files to S3 and generate an expirable, presigned share link
+    for successful uploads.
+
+    Parameters
+    ----------
+        out_dir : Path
+            Directory containing the manifest and a "groups" subdirectory
+            containing compressed WSI groups
+
+        s3_bucket : str
+            Name of the target S3 bucket
+
+        s3_bucket_location : str
+            Path-like location of the specific location within the bucket to
+            upload to
+
+        aws_region : str
+
+        export_links : bool, default=True
+            If true, extracts presigned url data from the metadata and saves it
+            to a CSV for easier access.
+
+
+    """
+    metadata_path = out_dir / "process_metadata.json"
+    metadata = load_metadata(metadata_path)
+
+    # check for zipped files
+    groups_dir = out_dir / "groups"
+
+    if not groups_dir.exists():
+        raise FileNotFoundError(
+            f"Invalid directory: {groups_dir}.\n\nHave images been compressed?"
+        )
+
+    valid_compressions = list(groups_dir.glob("*.zip"))
+
+    if not any(valid_compressions):
+        raise FileNotFoundError(
+            f"No compressed groups identified in this directory: {groups_dir}\n\nHave images been compressed? Review metadata file for zipped file locations: {metadata_path}"
+        )
+
+    metadata = upload_groups(
+        compressed_groups=valid_compressions,
+        bucket=s3_bucket,
+        key=s3_bucket_location,
+        metadata_tracker=metadata,
+        aws_region=aws_region,
+    )
+
+    metadata.export()
+
+    if export_sharelinks:
+        links = export_sharelinks(out_dir, metadata)
+        typer.echo(f"View AWS shareable links at {links}")
 
 
 # --------------- Single Run / Breakpoint Commands ---------------
