@@ -25,7 +25,7 @@ def test_format_manifest(tmp_path):
     manifest, _ = format_manifest(
         esm_export_path=export_path,
         save_dir=tmp_path,
-        metadata_tracker=ProcessMetadata("", tmp_path),
+        metadata_tracker=ProcessMetadata("test-metadata", tmp_path),
         group_id_prefix="GRP",
         testing=True,
     )

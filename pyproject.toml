@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=9.2",
+    "moto[s3]"
 ]
 
 [project.scripts]
