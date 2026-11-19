@@ -3,6 +3,7 @@ from time import time
 import json
 from pathlib import Path
 from typing import Any
+import yaml
 
 DT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -104,3 +105,27 @@ def load_json(path: Path) -> dict[str, Any]:
 
     with open(path, "r") as fn:
         return json.load(fn)
+
+
+# handle yaml dumping of Pathlib.Path
+class MyDumper(yaml.dumper.SafeDumper):
+    pass
+
+
+yaml.add_representer(
+    type(Path()),
+    lambda d, o: d.represent_scalar("tag:yaml.org,2002:str", str(o)),
+    MyDumper,
+)
+
+
+def write_yaml(path: Path, content: dict[str, Any]):
+    ensure_dir(path.parent)
+    with path.open("w", encoding="utf-8") as f:
+        yaml.dump(content, f, sort_keys=False, Dumper=MyDumper)
+        # yaml.safe_dump(content, f, sort_keys=False)
+
+
+def read_yaml(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
