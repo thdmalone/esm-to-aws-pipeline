@@ -1,13 +1,11 @@
-from multiprocessing import Process
 from shutil import make_archive, rmtree, copyfile
 from typing import Optional, Union, Literal
 from pathlib import Path
 
-from numpy import isin
 from pandas import DataFrame, read_csv
 from tqdm import tqdm
 
-from esm_aws_pipe.utils import Clock
+from esm_aws_pipe.utils import Clock, ensure_dir
 from esm_aws_pipe.core.provenance import ProcessMetadata
 
 REQUIRED_MANIFEST_HEADERS = {"Image ID", "File Location"}
@@ -148,7 +146,7 @@ def compress(
             source = Path(src)
             destination = Path(dst)
 
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            ensure_dir(destination.parent)
 
             copyfile(source, destination)
 
@@ -173,7 +171,7 @@ def compress(
     cleaned_manifest = cleaned_manifest.assign(
         dst_dir=f"{str(outdir)}\\"
         + cleaned_manifest["group"].astype(str)
-        + "\\"
+        + "\\groups\\"
         + cleaned_manifest["filename"].astype(str)
     )
 
