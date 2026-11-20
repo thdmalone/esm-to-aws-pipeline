@@ -4,7 +4,8 @@ from esm_aws_pipe.core.provenance import ProcessMetadata, load_metadata
 
 
 def test_metadata_loading(tmp_path):
-    mdo = ProcessMetadata("PYTEST-01", tmp_path)
+    path = tmp_path / "process_metadata.json"
+    mdo = ProcessMetadata("PYTEST-01", path)
 
     esm_metadata = {f"eem{n}": f"eem{n}" for n in range(1, 4)}
     manifest_metadata = {f"mm{n}": f"mm{n}" for n in range(1, 4)}
@@ -15,7 +16,6 @@ def test_metadata_loading(tmp_path):
     mdo.add_compression_metadata(**compression_metadata)
     mdo.export()
 
-    path = tmp_path / "process_metadata.json"
     loaded_mdo = load_metadata(path)
 
     assert (

@@ -18,7 +18,7 @@ REQ_ESM_EXPORT_COLS = {"Specimen Acc#", "Image ID", "File Location"}
 
 def format_manifest(
     esm_export_path: Path,
-    save_dir: Path,
+    manifest_path: Path,
     metadata_tracker: ProcessMetadata,
     *,
     group_id_prefix: str = "JDI",
@@ -124,21 +124,15 @@ def format_manifest(
         for i, image in enumerate(missing_group["File Location"].to_list(), 1):
             print(f"\t{i}) {image}")
 
-        solution_text = f"\t*These images will not be removed from the manifest; however, the the {group_id_prefix} number must be manually input into the manifest in the `group` column. Images with persistently missing {group_id_prefix} numbers during uploading will be skipped silently later"
+        solution_text = f"\t*These images will not be removed from the manifest; however, the the {group_id_prefix} number must be manually input into the manifest in the `group` column. Images with persistently missing {group_id_prefix} numbers during uploading will be skipped silently later\n"
         print(solution_text.expandtabs(2))
 
     endtime = clock.end()
 
     # save manifest
-    if not save_dir.is_dir():
-        raise FileNotFoundError(
-            f"Invalid directory. Cannot save manifest to {save_dir}"
-        )
+    manifest.to_csv(manifest_path, index=False)
 
-    save_path = save_dir / "esm_to_aws_manifest.csv"
-    manifest.to_csv(save_path, index=False)
-
-    print(f"Saved manifest to {save_path.resolve()}")
+    print(f"\nSaved manifest to {manifest_path.resolve()}")
 
     # add to running metadata tracker if provided
     metadata_tracker.add_esm_export_metadata(
@@ -153,7 +147,7 @@ def format_manifest(
         metadata_tracker._missing_groups = True
 
     metadata_tracker.add_manifest_metadata(
-        path=save_path.resolve(),
+        path=manifest_path.resolve(),
         created_in=endtime,
         total_wsis=len(manifest),
         total_groups=manifest["group"].nunique(),

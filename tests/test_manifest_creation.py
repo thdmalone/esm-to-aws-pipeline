@@ -1,15 +1,16 @@
 import pytest
 
 from esm_aws_pipe.core.format_manifest import format_manifest
-from esm_aws_pipe.core.provenance import ProcessMetadata
+from esm_aws_pipe.core.project import init_project
 
 from pandas import DataFrame
 
 
 def test_format_manifest(tmp_path):
+    batch_id = "test_batch"
     images = [1, 2, 3, 4]
     esm_export_data = {
-        "Specimen Acc#": ["test_batch" for _ in range(len(images))],
+        "Specimen Acc#": [batch_id for _ in range(len(images))],
         "Image ID": images,
         "File Location": [
             "//path/to/GRP-1 slide.svs",
@@ -19,13 +20,18 @@ def test_format_manifest(tmp_path):
         ],
     }
 
-    export_path = tmp_path / "manifest.csv"
-    DataFrame(esm_export_data).to_csv(export_path, index=False)
+    proj = init_project(tmp_path / "proj")
+    export_esm_to = proj.batches_dir / f"{batch_id}.csv"
+
+    DataFrame(esm_export_data).to_csv(export_esm_to, index=False)
+
+    run = proj.init_run(batch_id)
+    md = run.get_metadata()
 
     manifest, _ = format_manifest(
-        esm_export_path=export_path,
-        save_dir=tmp_path,
-        metadata_tracker=ProcessMetadata("test-metadata", tmp_path),
+        esm_export_path=run.esm_export,
+        manifest_path=run.manifest,
+        metadata_tracker=md,
         group_id_prefix="GRP",
         testing=True,
     )

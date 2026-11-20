@@ -8,7 +8,7 @@ from esm_aws_pipe.core.s3 import upload_file_to_s3
 
 
 @moto.mock_aws
-def test_upload_directory_to_s3(tmp_path: Path) -> None:
+def test_upload_file_to_s3(tmp_path: Path) -> None:
     bucket = "test-bucket"
     client = boto3.client("s3", region_name="us-east-1")
     client.create_bucket(Bucket=bucket)

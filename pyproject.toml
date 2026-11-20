@@ -19,6 +19,7 @@ dependencies = [
     "tqdm>=4.70",
     "typer>=0.27",
     "boto3",
+    "boto3[crt]",
     "pyyaml"
 ]
 
@@ -29,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-esm-to-aws = "esm_aws_pipe.cli:app"
+eta = "esm_aws_pipe.cli:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

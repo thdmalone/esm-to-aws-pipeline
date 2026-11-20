@@ -117,10 +117,10 @@ def compress(
         dropped = 0
         no_group = []
 
-        if any(missing_group):
+        if not missing_group.empty:
             n_missing = len(missing_group)
             print(
-                f"WARNING: {n_missing} WSIs that are still missing a group ID | drop_ungrouped = {d}"
+                f"\nWARNING: {n_missing} WSIs that are still missing a group ID | drop_ungrouped = {d}"
             )
             no_group = missing_group["File Location"].to_list()
             for i in no_group:
@@ -171,7 +171,7 @@ def compress(
     cleaned_manifest = cleaned_manifest.assign(
         dst_dir=f"{str(outdir)}\\"
         + cleaned_manifest["group"].astype(str)
-        + "\\groups\\"
+        + "\\"
         + cleaned_manifest["filename"].astype(str)
     )
 

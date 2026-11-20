@@ -11,7 +11,7 @@ from esm_aws_pipe.utils import DT_FORMAT, save_json, load_json
 @dataclass
 class ProcessMetadata:
     batch_id: str
-    save_dir: Path
+    save_path: Path
     esm_export: dict = field(default_factory=dict)
     manifest: dict = field(default_factory=dict)
     compression: dict = field(default_factory=dict)
@@ -20,10 +20,6 @@ class ProcessMetadata:
     _missing_groups: bool = False
 
     def __post_init__(self):
-        if not self.save_dir.is_dir():
-            raise ValueError(
-                f"Must provide path to a directory, not {self.save_dir.name}"
-            )
         self._ctime = datetime.now().strftime(DT_FORMAT)
 
         if self.batch_id == "":
@@ -78,9 +74,9 @@ class ProcessMetadata:
         }
 
     def export(self):
-        save_to = self.save_dir / "process_metadata.json"
-        save_json(save_to, self.to_dict())
-        print(f"\nSaved run metadata to {save_to.resolve()}")
+        save_json(self.save_path, self.to_dict())
+        # TODO log once set up
+        # print(f"\nSaved run metadata to {self.save_path.resolve()}")
 
 
 def load_metadata(path: Union[str, Path]) -> ProcessMetadata:
@@ -103,13 +99,14 @@ def load_metadata(path: Union[str, Path]) -> ProcessMetadata:
         )
 
     metadata_obj = ProcessMetadata(
-        batch_id=metadata.pop("batch_id"), save_dir=metadata_path.parent
+        batch_id=metadata.pop("batch_id"), save_path=metadata_path
     )
 
     func_map = {
         "esm_export_meta": metadata_obj.add_esm_export_metadata,
         "manifest_meta": metadata_obj.add_manifest_metadata,
         "compression_meta": metadata_obj.add_compression_metadata,
+        "upload_meta": metadata_obj.add_upload_metadata,
     }
 
     # override ctime

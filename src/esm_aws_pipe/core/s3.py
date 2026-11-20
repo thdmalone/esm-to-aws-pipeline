@@ -7,9 +7,32 @@ from datetime import datetime
 from esm_aws_pipe.core.provenance import ProcessMetadata
 from esm_aws_pipe.utils import DT_FORMAT
 
-from boto3 import client
-from botocore.exceptions import BotoCoreError, ClientError
+from boto3 import Session
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from pandas import DataFrame
+
+
+def validate_identity_and_s3_access(profile: Optional[str] = None):
+    """ """
+    p = profile if isinstance(profile, str) else ""
+    try:
+        session = Session(profile_name=p)
+        sts = session.client("sts")
+        identity = sts.get_caller_identity()
+        # identity = sts.get_caller_identity(profile=p)
+        print(f"Authenticated as: {identity['Arn']}")
+    except NoCredentialsError:
+        print(f"Error: No AWS credentials found in environment or ~/.aws/credentials.")
+    except ClientError as e:
+        print(f"Authentication failed: {e}")
+
+    try:
+        session = Session(profile_name=p)
+        s3 = session.client("s3")
+        s3.list_buckets()
+        print(f"S3 client authenticated and authorized successfully")
+    except ClientError as e:
+        print(f"S3 access failed: {e.response['Error']['Code']}")
 
 
 def upload_groups(
@@ -19,6 +42,7 @@ def upload_groups(
     metadata_tracker: ProcessMetadata,
     aws_region: Optional[str] = None,
     on_error: Literal["raise", "ignore"] = "ignore",
+    aws_config_profile: Optional[str] = None,
 ) -> ProcessMetadata:
     """Upload all compressed groups in a directory
 
@@ -67,6 +91,7 @@ def upload_groups(
             bucket_location=complete_key,
             error=on_error,
             region=aws_region,
+            profile_name=aws_config_profile,
         )
 
         payload = _parse_status(status)
@@ -76,7 +101,7 @@ def upload_groups(
             presigned_package = {"url": "", "generated": ""}
         else:
             presigned_package = generate_share_link(
-                bucket, complete_key, region=aws_region
+                bucket, complete_key, region=aws_region, profile_name=aws_config_profile
             )
 
         payload.update(
@@ -98,6 +123,7 @@ def upload_file_to_s3(
     bucket: str,
     bucket_location: str,
     *,
+    profile_name: Optional[str] = None,
     error: str,
     region: Optional[str] = None,
     max_retries: int = 3,
@@ -132,7 +158,8 @@ def upload_file_to_s3(
             successful uploads return a path-like s3 location
 
     """
-    cl = client("s3", region_name=region)
+    ss = Session(profile_name=profile_name)
+    cl = ss.client("s3", region_name=region)
     attempts = 0
     while True:
         try:
@@ -154,6 +181,7 @@ def generate_share_link(
     bucket: str,
     bucket_location: str,
     *,
+    profile_name: Optional[str] = None,
     region: Optional[str] = None,
     expires_in: int = 604800,
 ) -> dict[str, str]:
@@ -181,17 +209,18 @@ def generate_share_link(
             timestamp for when url was generated
 
     """
-    cl = client("s3", region_name=region)
+    ss = Session(profile_name=profile_name)
+    cl = ss.client("s3", region_name=region)
     url = cl.generate_presigned_url(
         ClientMethod="get_object",
         Params={"Bucket": bucket, "Key": bucket_location},
-        expires_in=expires_in,
+        ExpiresIn=expires_in,
     )
 
     return {"url": url, "generated": datetime.now().strftime(DT_FORMAT)}
 
 
-def export_sharelinks(out: Path, metadata: ProcessMetadata):
+def export_sharelinks(save_path: Path, metadata: ProcessMetadata):
     """Extract valid presigned URLs from the metadata tracker and exports to CSV
     for easier viewing. Groups that failed to upload and do not have an S3 location
     are skipped.
@@ -229,6 +258,5 @@ def export_sharelinks(out: Path, metadata: ProcessMetadata):
             }
         )
 
-    save_to = out / "sharelinks.csv"
-    DataFrame(records).to_csv(save_to, index=False)
-    return save_to
+    DataFrame(records).to_csv(save_path, index=False)
+    return save_path
