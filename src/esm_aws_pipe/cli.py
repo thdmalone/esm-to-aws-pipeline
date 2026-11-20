@@ -171,7 +171,6 @@ def upload_to_s3(
 
 
     """
-    validate_identity_and_s3_access(profile=aws_profile)
 
     proj = load_project(project_path)
     run = proj.load_run(batch_id)
@@ -181,6 +180,7 @@ def upload_to_s3(
     s3b = cfg.get("bucket", s3_bucket)
     s3bl = cfg.get("bucket_location", s3_bucket_location)
     s3ar = cfg.get("region", aws_region)
+    awp = cfg.get("aws_profile_name", aws_profile)
 
     if s3b is None or s3bl is None:
         raise ValueError(
@@ -195,13 +195,15 @@ def upload_to_s3(
             f"No compressed groups identified in this directory: {run.groups_dir}\n\nHave images been compressed? Review metadata file for zipped file locations: {run.metadata_file}"
         )
 
+    validate_identity_and_s3_access(profile=awp)
+
     metadata = upload_groups(
         compressed_groups=valid_compressions,
         bucket=s3b,
         key=s3bl,
         metadata_tracker=metadata,
         aws_region=s3ar,
-        aws_config_profile=aws_profile,
+        aws_config_profile=awp,
     )
 
     metadata.export()

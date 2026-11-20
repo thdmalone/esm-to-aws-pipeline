@@ -9,6 +9,7 @@ from esm_aws_pipe.utils import write_yaml, read_yaml
 class ProjectConfig:
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
+    aws_profile_name: str = ""
     bucket: str = ""
     bucket_location: str = ""
     region: str = "us-east-1"
