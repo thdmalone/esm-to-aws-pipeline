@@ -67,5 +67,5 @@ DEFAULT_CFG = ProjectConfig(
     compression_type="zip",
     remove_ungrouped=False,
     export_sharelinks=False,
-    review_missing_groups=False,
+    review_missing_groups=True,
 )
