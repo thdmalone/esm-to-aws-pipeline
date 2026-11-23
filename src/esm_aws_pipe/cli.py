@@ -46,10 +46,8 @@ def create_manifest(
     Parameters
     ----------
 
-        esm_export_file : Path
-            Path to the CSV export from eSlideManager containing Aperio
-            File Location and Image ID information. The parent directory
-            of this file is used for the output of all downstream tasks.
+        project_path : Path
+            Path to the current project
 
         batch_id : str
             The research ID associated with this batch (e.g., Rxx-xxxx)
@@ -216,117 +214,171 @@ def upload_to_s3(
 # --------------- Single Run / Breakpoint Commands ---------------
 
 
-@app.command("from_esm")
-def process_batch_esm(
-    esm_export_file: Annotated[Path, typer.Option(..., "--esm_export", "--in", "--i")],
-    batch_id: Annotated[str, typer.Option(..., "--batch_id", "--batch", "--b")] = "",
-    infer_batch_id: Annotated[bool, typer.Option("--infer_batch")] = False,
-    group_prefix: Annotated[str, typer.Option("--gp")] = "JDI",
+@app.command("run")
+def process_completely(
+    project_path: Annotated[Path, typer.Option(..., "--project-path", "--p")],
+    *,
+    batch_id: Annotated[
+        Optional[str], typer.Option("--batch_id", "--batch", "--b")
+    ] = None,
+    process_all: Annotated[bool, typer.Option("--process-all", "--all")] = False,
+    group_prefix: Annotated[
+        Optional[str], typer.Option("--group-prefix", "--gp")
+    ] = None,
+    review_missing_groups: Annotated[
+        bool, typer.Option(f"--review-missing-group", "--rmg")
+    ] = False,
+    compression_type: Annotated[
+        Optional[str], typer.Option("--compress", "--c")
+    ] = None,
+    remove_ungrouped: Annotated[
+        bool, typer.Option("--remove-ungrouped", "--rm")
+    ] = False,
+    aws_profile: Annotated[Optional[str], typer.Option("--aws-profile", "--ap")] = None,
+    s3_bucket: Annotated[Optional[str], typer.Option("--bucket", "--b")] = None,
+    s3_bucket_location: Annotated[Optional[str], typer.Option("--key", "--k")] = None,
+    aws_region: Annotated[Optional[str], typer.Option("--region", "--r")] = None,
+    export_links: Annotated[bool, typer.Option("--export-links")] = True,
 ):
-    """Start pipeline from an ESM export
-
-    Compress groups of WSIs to ZIP and upload to AWS
+    """Run all steps
 
     Parameters
     ----------
-        batch_id : str
-            The research ID associated with this batch
-            (e.g., Rxx-xxxx)
+        project_path : Path
+            Path to the current project
 
-        esm_export_file : Path
-            Path to the CSV export from eSlideManager containing
-            Aperio File Location and Image ID information.
+        batch_id : Optional[str], default=None
+            The research ID associated with this batch (e.g., Rxx-xxxx). Required if
+            `process_all=False`
 
-        out_dir : Path
-            Path to the output directory where zip files
-            and processing metadata will be saved to
+        process_all : bool, defualt=False
+            If true, will process all batches detected in the batches directory
 
-        save_manifest : bool, default=True
-            Export manifest to `out_dir` as "esm_to_aws_manifest.csv"
+        group_prefix : Optional[str], default=None
+            Prefix of image filenames indicating the grouping it belongs to.
+            Overrides whatever is specified in `config.yml`
+
+        review_missing_groups : bool, default=True
+            If True, will allow the user the remediate the manifest for WSIs with
+            missing group IDs prior to compression
+
+        compression_type : Optional[str], default="zip"
+            Specify how groups are compressed. Refer to
+            https://docs.python.org/3/library/shutil.html#shutil.make_archive
+            for more information on compression formats. Overrides whatever is
+            specified in `config.yml`
+
+        remove_ungrouped : bool, default=False
+            Specify where to remove images without a group ID in the `group`
+            column of the manifest. Images without a group id are grouped under
+            "ungrouped" by default. Overrides whatever is specified in `config.yml`
+
+        aws_profile : Optional[str], default=None
+            Specify a properly configured AWS profile according to `~/.aws/config`.
+            Overrides whatever is specified in `config.yml`
+
+        s3_bucket : Optional[str], default=None
+            Name of the target S3 bucket. Overrides whatever is specified in `config.yml`
+
+        s3_bucket_location : Optional[str], default=None
+            Path-like location of the specific location within the bucket to upload to.
+            Overrides whatever is specified in `config.yml`
+
+        aws_region : Optional[str], default=None
+
+        export_links : bool, default=True
+            If true, extracts presigned url data from the metadata and saves it to a CSV
+            for easier access.
+
 
     """
-    # TODO consider adding existence checks and overriding oversight
-    out_dir = esm_export_file.parent
+    proj = load_project(project_path)
+    cfg = proj.load_config()
 
-    if infer_batch_id:
-        batch_id = esm_export_file.stem
+    # load config variables
+    gp = cfg.get(f"esm_group_prefix", group_prefix)
+    rmg = cfg.get("review_missing_groups", review_missing_groups)
+    ct = cfg.get(f"compression_type", compression_type)
+    ru = cfg.get(f"remove_ungrouped", remove_ungrouped)
+    s3b = cfg.get("bucket", s3_bucket)
+    s3bl = cfg.get("bucket_location", s3_bucket_location)
+    s3ar = cfg.get("region", aws_region)
+    awp = cfg.get("aws_profile_name", aws_profile)
 
-    metadata = ProcessMetadata(batch_id=batch_id, save_dir=out_dir)
+    if s3b is None or s3bl is None:
+        raise ValueError(
+            f"Must specify an s3 bucket and bucket location (prefix): bucket={s3b} | prefix={s3bl}"
+        )
+    validate_identity_and_s3_access(profile=awp)
 
-    manifest, metadata = format_manifest(
-        esm_export_path=esm_export_file,
-        save_dir=out_dir,
-        metadata_tracker=metadata,
-        group_id_prefix=group_prefix,
-    )
+    # start pipeline
+    processing_queue = [f for f in proj.batches_dir.iterdir() if f.suffix == ".csv"]
+    if not any(processing_queue):
+        raise FileNotFoundError(f"No batches detected in {proj.batches_dir}.")
 
-    if metadata.missing_groups:
-        typer.echo(
-            f"Images with missing group IDs detected. Please review the manifest and remediate:\n{out_dir.resolve() / 'esm_to_aws_manifest.csv'}\n\n"
+    multiple_batches = len(processing_queue) > 1
+
+    if multiple_batches:
+        if process_all:
+            typer.echo(f"\nIdentified {len(processing_queue)} batches to process")
+        elif not isinstance(batch_id, str):
+            raise ValueError(
+                f"Multiple batches identified and {process_all=}. Must specify a `batch_id` to run. (Got {batch_id=})"
+            )
+        elif isinstance(batch_id, str):
+            processing_queue = [proj.batches_dir / batch_id]
+
+    for batch in processing_queue:
+        typer.echo(f"\n\n\t\t----- Processing {batch} -----")
+        run = proj.init_run(batch.stem)
+        metadata = run.get_metadata()
+
+        manifest, metadata = format_manifest(
+            esm_export_path=run.esm_export,
+            manifest_path=run.manifest,
+            metadata_tracker=metadata,
+            group_id_prefix=gp,
         )
 
-        ready = typer.confirm("Ready to proceed?")
-        if not ready:
+        if metadata.missing_groups and review_missing_groups:
             typer.echo(
-                f"Terminating processing. Restart from ESM or continue directly from an existing manifest."
+                f"\nPlease review the manifest and remediate before compression:\n\n{run.manifest.resolve()}\n\n"
             )
-            return
 
-    zipped_paths, metadata = compress(
-        manifest=manifest, outdir=out_dir, metadata_tracker=metadata
-    )
+            proceed = typer.confirm(f"Ready to proceed?")
+            if not proceed:
+                typer.echo(f"Terminating processing")
+                return
+        else:
+            typer.echo(f"Finished generating the processing manifest")
 
-    metadata.export()
+        _, metadata = compress(
+            run.manifest,
+            run.groups_dir,
+            metadata,
+            remove_ungrouped=ru,
+            compression_type=ct,
+        )
 
+        # check for zipped files
+        valid_compressions = list(run.groups_dir.glob("*.zip"))
 
-@app.command("from_manifest")
-def process_batch_manifest():
-    """Start pipeline from a manifest (step 2)
+        if not any(valid_compressions):
+            raise FileNotFoundError(
+                f"No compressed groups identified in this directory: {run.groups_dir}\n\nHave images been compressed? Review metadata file for zipped file locations: {run.metadata_file}"
+            )
 
-    Compress groups of WSIs to ZIP and upload to AWS
+        metadata = upload_groups(
+            compressed_groups=valid_compressions,
+            bucket=s3b,
+            key=s3bl,
+            metadata_tracker=metadata,
+            aws_region=s3ar,
+            aws_config_profile=awp,
+        )
 
-    Parameters
-    ----------
-        batch_id : str
-            The research ID associated with this batch
-            (e.g., Rxx-xxxx)
+        metadata.export()
 
-        esm_export_file : Path
-            Path to the CSV export from eSlideManager containing
-            Aperio File Location and Image ID information.
-
-        out_dir : Path
-            Path to the output directory where zip files
-            and processing metadata will be saved to
-
-        save_manifest : bool, default=True
-            Export manifest to `out_dir` as "esm_to_aws_manifest.csv"
-
-    """
-
-
-@app.command("mult_batches")
-def process_multiple_batches():
-    """Process all batches in a directory. Only ESM exports are supported.
-
-    Compress groups of WSIs to ZIP and upload to AWS
-
-    Parameters
-    ----------
-        batch_id : str
-            The research ID associated with this batch
-            (e.g., Rxx-xxxx)
-
-        esm_export_file : Path
-            Path to the CSV export from eSlideManager containing
-            Aperio File Location and Image ID information.
-
-        out_dir : Path
-            Path to the output directory where zip files
-            and processing metadata will be saved to
-
-        save_manifest : bool, default=True
-            Export manifest to `out_dir` as "esm_to_aws_manifest.csv"
-
-
-    """
+        if export_links:
+            links = export_sharelinks(run.shareable_links, metadata)
+            typer.echo(f"View AWS shareable links at {links}")
