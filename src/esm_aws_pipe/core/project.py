@@ -2,10 +2,10 @@ from pathlib import Path
 from dataclasses import dataclass
 from shutil import move
 
-from esm_aws_pipe.utils import ensure_dir, read_yaml
+from esm_aws_pipe.utils import ensure_dir, read_yaml, write_yaml
 from esm_aws_pipe.core.provenance import ProcessMetadata, load_metadata
 
-from esm_aws_pipe.core.config import ProjectConfig
+from esm_aws_pipe.core.config import ProjectConfig, DEFAULT_CFG
 
 
 @dataclass
@@ -30,11 +30,11 @@ class ProcessingRun:
 
     @property
     def manifest(self) -> Path:
-        return self.root / "esm_to_aws_manifest.csv"
+        return self.root / "manifest.csv"
 
     @property
     def metadata_file(self) -> Path:
-        return self.root / "process_metadata.json"
+        return self.root / "run_metadata.json"
 
     @property
     def shareable_links(self) -> Path:
@@ -44,9 +44,13 @@ class ProcessingRun:
         """Create metadata object, or load an existing one"""
         # NOTE log load/creation decision
         if self.metadata_file.exists():
-            return load_metadata(self.metadata_file)
+            return load_metadata(self.metadata_file, self.project)
 
-        return ProcessMetadata(batch_id=self.batch_id, save_path=self.metadata_file)
+        return ProcessMetadata(
+            batch_id=self.batch_id,
+            save_path=self.metadata_file,
+            project_path=self.project,
+        )
 
 
 @dataclass
@@ -91,7 +95,13 @@ class Project:
 
     def load_config(self) -> ProjectConfig:
         cfg = read_yaml(self.config)
-        return ProjectConfig(**cfg)
+
+        # flatten values
+        flattened_cfg = {}
+        for v in cfg.values():
+            flattened_cfg.update(**v)
+
+        return ProjectConfig(**flattened_cfg)
 
 
 def init_project(root: Path) -> Project:
@@ -102,8 +112,7 @@ def init_project(root: Path) -> Project:
     ensure_dir(proj.batches_dir)
     ensure_dir(proj.runs_dir)
 
-    default_cfg = ProjectConfig()
-    default_cfg.export(proj.config)
+    write_yaml(proj.config, DEFAULT_CFG.to_dict())
 
     return proj
 
