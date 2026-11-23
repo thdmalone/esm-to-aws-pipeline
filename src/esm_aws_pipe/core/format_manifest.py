@@ -136,7 +136,6 @@ def format_manifest(
 
     # add to running metadata tracker if provided
     metadata_tracker.add_esm_export_metadata(
-        path=esm_export_path.resolve(),
         identified_exports=len(esm_export),
         dropped_images=dropped,
         missing_group_id_count=len(missing_group),
@@ -147,7 +146,6 @@ def format_manifest(
         metadata_tracker._missing_groups = True
 
     metadata_tracker.add_manifest_metadata(
-        path=manifest_path.resolve(),
         created_in=endtime,
         total_wsis=len(manifest),
         total_groups=manifest["group"].nunique(),

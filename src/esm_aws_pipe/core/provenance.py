@@ -11,6 +11,7 @@ from esm_aws_pipe.utils import DT_FORMAT, save_json, load_json
 @dataclass
 class ProcessMetadata:
     batch_id: str
+    project_path: Path
     save_path: Path
     esm_export: dict = field(default_factory=dict)
     manifest: dict = field(default_factory=dict)
@@ -66,6 +67,7 @@ class ProcessMetadata:
     def to_dict(self) -> dict:
         return {
             "created": self._ctime,
+            "project": self.project_path,
             "batch_id": self.batch_id,
             "esm_export_meta": self.esm_export,
             "manifest_meta": self.manifest,
@@ -79,12 +81,12 @@ class ProcessMetadata:
         # print(f"\nSaved run metadata to {self.save_path.resolve()}")
 
 
-def load_metadata(path: Union[str, Path]) -> ProcessMetadata:
+def load_metadata(path: Union[str, Path], project: Path) -> ProcessMetadata:
     """Load previously saved metadata"""
     metadata_path = Path(path) if isinstance(path, str) else path
     if not metadata_path.exists():
         raise FileNotFoundError(
-            f"No metadata found at this location {metadata_path.resolve()}\n\nPlease check the path or run `create_manifest` first."
+            f"No metadata found at this location {metadata_path.resolve()}\n\nPlease check the path or run `eta manifest` first."
         )
 
     metadata = load_json(metadata_path)
@@ -99,7 +101,7 @@ def load_metadata(path: Union[str, Path]) -> ProcessMetadata:
         )
 
     metadata_obj = ProcessMetadata(
-        batch_id=metadata.pop("batch_id"), save_path=metadata_path
+        batch_id=metadata.pop("batch_id"), save_path=metadata_path, project_path=project
     )
 
     func_map = {

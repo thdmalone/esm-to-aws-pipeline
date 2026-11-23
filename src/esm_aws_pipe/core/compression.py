@@ -130,6 +130,7 @@ def compress(
                 dropped = n_missing
                 m = m[m["group"].isna() == False]
             else:
+                m["group"] = m["group"].astype("object")
                 m.loc[missing_group.index, "group"] = "ungrouped"
 
         if isinstance(metadata_tracker, ProcessMetadata):
@@ -210,15 +211,3 @@ def compress(
     )
 
     return zipped_paths, metadata_tracker
-
-
-if __name__ == "__main__":
-    mani = read_csv(
-        r"C:\Users\thmalone\OneDrive - Childrens Hospital Los Angeles\Personal Research\Acute Projects\PLM AWS Upload\cli-test\esm_to_aws_manifest.csv"
-    )
-    od = Path(
-        r"C:\Users\thmalone\OneDrive - Childrens Hospital Los Angeles\Personal Research\Acute Projects\PLM AWS Upload\cli-test"
-    )
-    mdt = ProcessMetadata("cli-test", od)
-
-    compress(manifest=mani, outdir=od, metadata_tracker=mdt)
