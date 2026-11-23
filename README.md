@@ -55,7 +55,7 @@ This will create the following inside the project directory:
    - Image Id
    - File Location
 
-3. Run pipeline via modular or comprehensive commands (_assuming `config.yml` contains optional arguments_)
+3. Run pipeline via modular or comprehensive commands (_assuming optional arguments are configured in `config.yml`_)
 
 - Modular:
 
